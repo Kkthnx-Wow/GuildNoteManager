@@ -18,10 +18,10 @@ local UnitFullName = UnitFullName
 local print = print
 
 -- Constants
-local GN_UPDATE = "GN_UPDATE"
+local GNM_UPDATE = "GNM_UPDATE"
 
 -- Addon message prefix registration
-C_ChatInfo_RegisterAddonMessagePrefix(GN_UPDATE)
+C_ChatInfo_RegisterAddonMessagePrefix(GNM_UPDATE)
 
 -- Slash commands
 local GNOTE_ON_COMMAND = "/gnmon"
@@ -45,7 +45,7 @@ end
 local function GetPlayerFullName()
 	local playerName, playerRealm = UnitFullName("player")
 	if not playerName or not playerRealm then
-		PrintMessage("Failed to retrieve player's full name.", "ff3333") -- Light red for failure
+		-- PrintMessage("Failed to retrieve player's full name.", "ff3333") -- Light red for failure
 		return nil, nil -- Unable to get player's full name
 	end
 	return playerName, playerRealm
@@ -93,18 +93,18 @@ end
 function SlashCmdList.GNOTEON()
 	GuildNoteManagerDB = true
 	GuildNoteToggle = true
-	PrintMessage("Auto Guild Note login message on", "00cc00") -- Green for positive action
+	-- PrintMessage("Auto Guild Note login message on", "00cc00") -- Green for positive action
 end
 
 function SlashCmdList.GNOTEOFF()
 	GuildNoteManagerDB = false
 	GuildNoteToggle = false
-	PrintMessage("Auto Guild Note login message off", "cc0000") -- Red for negative action
+	-- PrintMessage("Auto Guild Note login message off", "cc0000") -- Red for negative action
 end
 
 function SlashCmdList.GNOTEHELP()
-	PrintMessage("Type /gnmon to turn login messages on.", "00a3cc") -- Default color
-	PrintMessage("Type /gnmoff to turn login messages off.", "00a3cc") -- Default color
+	-- PrintMessage("Type /gnmon to turn login messages on.", "00a3cc") -- Default color
+	-- PrintMessage("Type /gnmoff to turn login messages off.", "00a3cc") -- Default color
 	-- PrintMessage("Type " .. GNOTE_UPDATE_COMMAND .. " to update your guild note manually.", "00a3cc")  -- Default color
 end
 
@@ -112,12 +112,12 @@ end
 local function SetGuildNoteByName(sender, rmessage, specAndLvl)
 	local playerName, playerRealm = GetPlayerFullName()
 	if not playerName or not playerRealm then
-		PrintMessage("Failed to retrieve player's full name.", "ff3333") -- Light red for failure
+		-- PrintMessage("Failed to retrieve player's full name.", "ff3333") -- Light red for failure
 		return -- Unable to get player's full name
 	end
 
-	PrintMessage("Player name: " .. playerName) -- Debugging message
-	PrintMessage("Player realm: " .. playerRealm) -- Debugging message
+	-- PrintMessage("Player name: " .. playerName) -- Debugging message
+	-- PrintMessage("Player realm: " .. playerRealm) -- Debugging message
 
 	if IsPlayerInGuild() then
 		if CanPlayerEditNote() then
@@ -131,22 +131,23 @@ local function SetGuildNoteByName(sender, rmessage, specAndLvl)
 			for i = 1, numTotal do
 				local fname, _, _, _, _, _, publicNote = GetGuildRosterInfo(i)
 				if fname == sender then
-					if publicNote ~= rmessage and GuildNoteManagerDB then
-						PrintMessage("-------------------------------------------------", "666666") -- Gray for separator
-						PrintMessage("PLAYER: " .. playerName .. "-" .. playerRealm .. " Note was updated to " .. rmessage .. professionString, "ff9933") -- Orange for player update message with professions
-						PrintMessage("-------------------------------------------------", "666666") -- Gray for separator
+					-- if publicNote ~= rmessage and GuildNoteManagerDB then -- Idk if I want to even keep this DB or not. We will see.
+					if publicNote ~= rmessage then
+						-- PrintMessage("-------------------------------------------------", "666666") -- Gray for separator
+						PrintMessage("GNM: " .. playerName .. "-" .. playerRealm .. " Note was updated to " .. rmessage .. professionString, "ff9933") -- Orange for player update message with professions
+						-- PrintMessage("-------------------------------------------------", "666666") -- Gray for separator
 					end
 					GuildRosterSetPublicNote(i, rmessage .. professionString)
-					PrintMessage("Guild note updated for player: " .. fname, "339933") -- Dark green for success
+					-- PrintMessage("Guild note updated for player: " .. fname, "339933") -- Dark green for success
 					return
 				end
 			end
-			PrintMessage("Failed to update guild note for player: " .. sender, "cc3333") -- Dark red for failure
+			-- PrintMessage("Failed to update guild note for player: " .. sender, "cc3333") -- Dark red for failure
 		else
-			PrintMessage("Insufficient permission to edit public note.", "cc3333") -- Dark red for failure
+			-- PrintMessage("Insufficient permission to edit public note.", "cc3333") -- Dark red for failure
 		end
 	else
-		PrintMessage("Not in a guild. Cannot update guild note.", "cc3333") -- Dark red for failure
+		-- PrintMessage("Not in a guild. Cannot update guild note.", "cc3333") -- Dark red for failure
 	end
 end
 
@@ -165,13 +166,13 @@ local function OnEvent(self, event, unit)
 
 	local playerName, playerRealm = GetPlayerFullName()
 	if not playerName or not playerRealm then
-		PrintMessage("Failed to get player's full name.", "ff3333") -- Light red for failure
+		-- PrintMessage("Failed to get player's full name.", "ff3333") -- Light red for failure
 		isUpdatingGuildNote = false -- Reset the flag
 		return -- Unable to get player's full name
 	end
 
-	PrintMessage("Player name: " .. playerName) -- Debugging message
-	PrintMessage("Player realm: " .. playerRealm) -- Debugging message
+	-- PrintMessage("Player name: " .. playerName) -- Debugging message
+	-- PrintMessage("Player realm: " .. playerRealm) -- Debugging message
 
 	local specAndLvl = ""
 	local currentSpec = GetSpecialization() or 0
@@ -186,20 +187,27 @@ local function OnEvent(self, event, unit)
 	end
 
 	if event == "PLAYER_LOGIN" then
-		PrintMessage(" ", "000000") -- Black for spacing
-		PrintMessage("Auto Guild Note Loaded", "669DFF") -- Orange for notification
-		PrintMessage("", "000000") -- Black for spacing
-		PrintMessage("Type " .. GNOTE_HELP_COMMAND .. " to see help information", "00a3cc") -- Default color for help message
-		PrintMessage("Type " .. GNOTE_ON_COMMAND .. " to turn login messages on.", "00cc00") -- Green for positive action
-		PrintMessage("Type " .. GNOTE_OFF_COMMAND .. " to turn login messages off.", "cc0000") -- Red for negative action
-		PrintMessage("", "000000") -- Black for spacing
+		-- -- Print a blank line for spacing
+		-- PrintMessage(" ", "000000")
+		-- -- Notify that auto Guild Note has loaded
+		-- PrintMessage("Auto Guild Note Loaded", "669DFF")
+		-- -- Print a blank line for spacing
+		-- PrintMessage("", "000000")
+		-- -- Provide help information
+		-- PrintMessage("Type " .. GNOTE_HELP_COMMAND .. " to see help information", "00a3cc")
+		-- -- Instruct to turn login messages on
+		-- PrintMessage("Type " .. GNOTE_ON_COMMAND .. " to turn login messages on.", "00cc00")
+		-- -- Instruct to turn login messages off
+		-- PrintMessage("Type " .. GNOTE_OFF_COMMAND .. " to turn login messages off.", "cc0000")
+		-- -- Print a blank line for spacing
+		-- PrintMessage("", "000000")
 	end
 
 	if GuildNoteManagerDB and event == "PLAYER_LOGIN" then
-		PrintMessage("-------------------------------------------------", "666666") -- Gray for separator
-		PrintMessage("PLAYER: " .. playerName .. "-" .. playerRealm .. " logged on as " .. specAndLvl, "0066cc") -- Blue for player login message
-		PrintMessage("-------------------------------------------------", "666666") -- Gray for separator
-		print(" ")
+		-- PrintMessage("-------------------------------------------------", "666666") -- Gray for separator
+		-- PrintMessage("GNM: " .. playerName .. "-" .. playerRealm .. " logged on as " .. specAndLvl, "0066cc") -- Blue for player login message
+		-- PrintMessage("-------------------------------------------------", "666666") -- Gray for separator
+		-- print(" ")
 	end
 
 	if event == "PLAYER_AVG_ITEM_LEVEL_UPDATE" and UnitLevel("player") >= 10 then -- Idk what level or when we get spec? 15? 10? Blah!
