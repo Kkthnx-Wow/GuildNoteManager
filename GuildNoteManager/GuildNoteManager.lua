@@ -1,40 +1,41 @@
--- Author: Josh 'Kkthnx' Russell 2024
--- Addon Name: GuildNoteManager
-
 -- Cache frequently used global functions and values
-local UnitFullName = UnitFullName
-local IsInGuild = IsInGuild
+local table_insert = table.insert
+
+local C_ChatInfo_RegisterAddonMessagePrefix = C_ChatInfo.RegisterAddonMessagePrefix
 local CanEditPublicNote = CanEditPublicNote
+local GetAverageItemLevel = GetAverageItemLevel
+local GetGuildRosterInfo = GetGuildRosterInfo
 local GetMaxLevelForPlayerExpansion = GetMaxLevelForPlayerExpansion
 local GetMaxPlayerLevel = GetMaxPlayerLevel
+local GetNumGuildMembers = GetNumGuildMembers
 local GetProfessions = GetProfessions
-local GetSpellTabInfo = GetSpellTabInfo
 local GetSpecialization = GetSpecialization
 local GetSpecializationInfo = GetSpecializationInfo
-local GetAverageItemLevel = GetAverageItemLevel
+local GetSpellTabInfo = GetSpellTabInfo
 local GuildRosterSetPublicNote = GuildRosterSetPublicNote
-local GetGuildRosterInfo = GetGuildRosterInfo
-local GetNumGuildMembers = GetNumGuildMembers
+local IsInGuild = IsInGuild
+local UnitFullName = UnitFullName
+local print = print
 
 -- Constants
 local GN_UPDATE = "GN_UPDATE"
 
 -- Addon message prefix registration
-C_ChatInfo.RegisterAddonMessagePrefix(GN_UPDATE)
+C_ChatInfo_RegisterAddonMessagePrefix(GN_UPDATE)
 
 -- Slash commands
-local GNOTE_ON_COMMAND = "/gnoteon"
-local GNOTE_OFF_COMMAND = "/gnoteoff"
-local GNOTE_HELP_COMMAND = "/gnotehelp" -- Define GNOTE_HELP_COMMAND here
+local GNOTE_ON_COMMAND = "/gnmon"
+local GNOTE_OFF_COMMAND = "/gnmoff"
+local GNOTE_HELP_COMMAND = "/gnmhelp" -- Define GNOTE_HELP_COMMAND here
 
 -- Slash command functions
 SLASH_GNOTEON1 = GNOTE_ON_COMMAND
 SLASH_GNOTEOFF1 = GNOTE_OFF_COMMAND
 SLASH_GNOTEHELP1 = GNOTE_HELP_COMMAND
 
-local GuildNoteToggle = GuildNoteManagerDB
+GuildNoteToggle = GuildNoteManagerDB
 
--- Function for printing messages with color
+-- Function to print messages with color
 local function PrintMessage(message, color)
 	color = color or "00a3cc" -- Default color if not provided
 	print("|cFF" .. color .. message .. "|r")
@@ -79,11 +80,11 @@ local function GetPrimaryProfessions()
 	local prof1, prof2 = GetProfessions()
 	if prof1 then
 		local profName1 = GetSpellTabInfo(prof1)
-		table.insert(professions, profName1:sub(1, 3):upper()) -- Extract first two letters and convert to uppercase
+		table_insert(professions, profName1:sub(1, 3):upper()) -- Extract first two letters and convert to uppercase
 	end
 	if prof2 then
 		local profName2 = GetSpellTabInfo(prof2)
-		table.insert(professions, profName2:sub(1, 3):upper()) -- Extract first two letters and convert to uppercase
+		table_insert(professions, profName2:sub(1, 3):upper()) -- Extract first two letters and convert to uppercase
 	end
 	return professions
 end
@@ -102,32 +103,21 @@ function SlashCmdList.GNOTEOFF()
 end
 
 function SlashCmdList.GNOTEHELP()
-	PrintMessage("Type /gnoteon to turn login messages on.", "00a3cc") -- Default color
-	PrintMessage("Type /gnoteoff to turn login messages off.", "00a3cc") -- Default color
+	PrintMessage("Type /gnmon to turn login messages on.", "00a3cc") -- Default color
+	PrintMessage("Type /gnmoff to turn login messages off.", "00a3cc") -- Default color
 	-- PrintMessage("Type " .. GNOTE_UPDATE_COMMAND .. " to update your guild note manually.", "00a3cc")  -- Default color
 end
 
 -- Function to set guild note by name
-local function SetGuildNoteByName(sender, rmessage)
+local function SetGuildNoteByName(sender, rmessage, specAndLvl)
 	local playerName, playerRealm = GetPlayerFullName()
 	if not playerName or not playerRealm then
 		PrintMessage("Failed to retrieve player's full name.", "ff3333") -- Light red for failure
 		return -- Unable to get player's full name
 	end
 
-	print("Player name: " .. playerName) -- Debugging message
-	print("Player realm: " .. playerRealm) -- Debugging message
-
-	local specAndLvl = ""
-	if IsPlayerAtMaxLevel() then
-		local currentSpec = GetSpecialization() or 0
-		local currentSpecName = select(2, GetSpecializationInfo(currentSpec)) or "None"
-		local shortSpecName = currentSpecName:gsub("(%a)%a*%s*", "%1"):upper() -- Extract first letters and convert to uppercase
-		local myitemLvl = ("%.2f"):format(GetAverageItemLevel())
-		specAndLvl = shortSpecName .. "-" .. myitemLvl
-	else
-		specAndLvl = "Leveling"
-	end
+	PrintMessage("Player name: " .. playerName) -- Debugging message
+	PrintMessage("Player realm: " .. playerRealm) -- Debugging message
 
 	if IsPlayerInGuild() then
 		if CanPlayerEditNote() then
@@ -165,61 +155,78 @@ local isUpdatingGuildNote = false
 
 -- Event handling function
 local function OnEvent(self, event, ...)
-	if event == "PLAYER_LOGIN" or event == "PLAYER_AVG_ITEM_LEVEL_UPDATE" then
-		-- Check if the function is already executing, if so, return early
-		if isUpdatingGuildNote then
-			return
-		end
-
-		-- Set the flag to true to indicate that the function is executing
-		isUpdatingGuildNote = true
-
-		local playerName, playerRealm = GetPlayerFullName()
-		if not playerName or not playerRealm then
-			PrintMessage("Failed to get player's full name.", "ff3333") -- Light red for failure
-			isUpdatingGuildNote = false -- Reset the flag
-			return -- Unable to get player's full name
-		end
-
-		print("Player name: " .. playerName) -- Debugging message
-		print("Player realm: " .. playerRealm) -- Debugging message
-
-		local currentSpec = GetSpecialization() or 0
-		local currentSpecName = select(2, GetSpecializationInfo(currentSpec)) or "None"
-		local shortSpecName = currentSpecName:gsub("(%a)%a*%s*", "%1"):upper() -- Extract first letters and convert to uppercase
-		local myitemLvl = ("%.2f"):format(GetAverageItemLevel())
-		local specAndLvl = shortSpecName .. "-" .. myitemLvl
-
-		if event == "PLAYER_LOGIN" then
-			PrintMessage(" ", "000000") -- Black for spacing
-			PrintMessage("Auto Guild Note Loaded", "ff7f00") -- Orange for notification
-			PrintMessage("", "000000") -- Black for spacing
-			PrintMessage("Type " .. GNOTE_HELP_COMMAND .. " to see help information", "00a3cc") -- Default color for help message
-			PrintMessage("Type " .. GNOTE_ON_COMMAND .. " to turn login messages on.", "00cc00") -- Green for positive action
-			PrintMessage("Type " .. GNOTE_OFF_COMMAND .. " to turn login messages off.", "cc0000") -- Red for negative action
-			PrintMessage("", "000000") -- Black for spacing
-		end
-
-		if GuildNoteManagerDB and event == "PLAYER_LOGIN" then
-			PrintMessage("-------------------------------------------------", "666666") -- Gray for separator
-			PrintMessage("PLAYER: " .. playerName .. "-" .. playerRealm .. " logged on as " .. specAndLvl, "0066cc") -- Blue for player login message
-			PrintMessage("-------------------------------------------------", "666666") -- Gray for separator
-			print(" ")
-		end
-
-		if event == "PLAYER_AVG_ITEM_LEVEL_UPDATE" and IsPlayerAtMaxLevel() then
-			SetGuildNoteByName(playerName .. "-" .. playerRealm, specAndLvl)
-		end
-
-		-- Reset the flag after a short delay (debouncing)
-		C_Timer.After(1, function()
-			isUpdatingGuildNote = false
-		end)
+	-- Check if the function is already executing, if so, return early
+	if isUpdatingGuildNote then
+		return
 	end
+
+	-- Set the flag to true to indicate that the function is executing
+	isUpdatingGuildNote = true
+
+	local playerName, playerRealm = GetPlayerFullName()
+	if not playerName or not playerRealm then
+		PrintMessage("Failed to get player's full name.", "ff3333") -- Light red for failure
+		isUpdatingGuildNote = false -- Reset the flag
+		return -- Unable to get player's full name
+	end
+
+	PrintMessage("Player name: " .. playerName) -- Debugging message
+	PrintMessage("Player realm: " .. playerRealm) -- Debugging message
+
+	local specAndLvl = ""
+	local currentSpec = GetSpecialization() or 0
+	local _, currentSpecName = GetSpecializationInfo(currentSpec)
+	local shortSpecName = currentSpecName and currentSpecName:gsub("(%a)%a*%s*", "%1"):upper() or "??"
+	local myitemLvl = ("%.2f"):format(GetAverageItemLevel())
+
+	if IsPlayerAtMaxLevel() then
+		specAndLvl = (shortSpecName or "??") .. "-" .. myitemLvl
+	else
+		specAndLvl = (shortSpecName or "??") .. " - " .. myitemLvl .. " - " .. REQ_LEVEL_ABBR .. ": " .. UnitLevel("player")
+	end
+
+	if event == "PLAYER_LOGIN" then
+		PrintMessage(" ", "000000") -- Black for spacing
+		PrintMessage("Auto Guild Note Loaded", "669DFF") -- Orange for notification
+		PrintMessage("", "000000") -- Black for spacing
+		PrintMessage("Type " .. GNOTE_HELP_COMMAND .. " to see help information", "00a3cc") -- Default color for help message
+		PrintMessage("Type " .. GNOTE_ON_COMMAND .. " to turn login messages on.", "00cc00") -- Green for positive action
+		PrintMessage("Type " .. GNOTE_OFF_COMMAND .. " to turn login messages off.", "cc0000") -- Red for negative action
+		PrintMessage("", "000000") -- Black for spacing
+	end
+
+	if GuildNoteManagerDB and event == "PLAYER_LOGIN" then
+		PrintMessage("-------------------------------------------------", "666666") -- Gray for separator
+		PrintMessage("PLAYER: " .. playerName .. "-" .. playerRealm .. " logged on as " .. specAndLvl, "0066cc") -- Blue for player login message
+		PrintMessage("-------------------------------------------------", "666666") -- Gray for separator
+		print(" ")
+	end
+
+	if event == "PLAYER_AVG_ITEM_LEVEL_UPDATE" and UnitLevel("player") >= 10 then -- Idk what level or when we get spec? 15? 10? Blah!
+		SetGuildNoteByName(playerName .. "-" .. playerRealm, specAndLvl)
+	end
+
+	-- Handle specialization change event
+	if event == "PLAYER_SPECIALIZATION_CHANGED" then
+		-- Update the specialization information
+		local newSpec = ...
+		local _, newSpecName = GetSpecializationInfo(newSpec)
+		shortSpecName = newSpecName and newSpecName:gsub("(%a)%a*%s*", "%1"):upper() or "??"
+		specAndLvl = (shortSpecName or "??") .. "-" .. myitemLvl
+
+		-- Update the guild note
+		SetGuildNoteByName(playerName .. "-" .. playerRealm, specAndLvl)
+	end
+
+	-- Reset the flag after a short delay (debouncing)
+	C_Timer.After(1, function()
+		isUpdatingGuildNote = false
+	end)
 end
 
 -- Event registration
 local GuildNoteManager = CreateFrame("Frame")
 GuildNoteManager:RegisterEvent("PLAYER_LOGIN")
 GuildNoteManager:RegisterEvent("PLAYER_AVG_ITEM_LEVEL_UPDATE")
+GuildNoteManager:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED") -- Register the specialization change event
 GuildNoteManager:SetScript("OnEvent", OnEvent)
