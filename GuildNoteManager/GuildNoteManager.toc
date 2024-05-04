@@ -1,0 +1,11 @@
+## Interface: 101007
+## Name: GuildNoteManager
+## Title: |cff669DFFGuild Note Manager|r
+## Notes: Streamlines guild note management by automatically updating with player's specialization and professions.|n|n|cff669DFFDeveloper|cffffffff:|r |nJosh "|CFF7b8489Kkthnx|r" Russell|n|n|cff009cdePayPal|r|cffffffff:|r |n|cffffffffwww.paypal.me/KkthnxTV|r|n|n|cfff96854Patreon|r|cffffffff:|r |n|cffffffffwww.patreon.com/Kkthnx|r
+## Version: 1.0
+## Author: Josh "Kkthnx" Russell
+## IconTexture: Interface\ICONS\INV_Misc_Note_01
+## X-Support: DF
+## SavedVariables: GuildNoteManagerSV
+
+GuildNoteManager.lua
