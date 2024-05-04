@@ -154,7 +154,7 @@ end
 local isUpdatingGuildNote = false
 
 -- Event handling function
-local function OnEvent(self, event, ...)
+local function OnEvent(self, event, unit)
 	-- Check if the function is already executing, if so, return early
 	if isUpdatingGuildNote then
 		return
@@ -207,15 +207,18 @@ local function OnEvent(self, event, ...)
 	end
 
 	-- Handle specialization change event
-	if event == "PLAYER_SPECIALIZATION_CHANGED" then
-		-- Update the specialization information
-		local newSpec = ...
-		local _, newSpecName = GetSpecializationInfo(newSpec)
-		shortSpecName = newSpecName and newSpecName:gsub("(%a)%a*%s*", "%1"):upper() or "??"
-		specAndLvl = (shortSpecName or "??") .. "-" .. myitemLvl
+	if event == "PLAYER_SPECIALIZATION_CHANGED" and unit == "player" then
+		-- Add a short delay to ensure event stability
+		C_Timer.After(0.5, function()
+			-- Update the specialization information after the delay
+			local newSpec = GetSpecialization() or 0
+			local _, newSpecName = GetSpecializationInfo(newSpec)
+			shortSpecName = newSpecName and newSpecName:gsub("(%a)%a*%s*", "%1"):upper() or "??"
+			specAndLvl = (shortSpecName or "??") .. "-" .. myitemLvl
 
-		-- Update the guild note
-		SetGuildNoteByName(playerName .. "-" .. playerRealm, specAndLvl)
+			-- Update the guild note
+			SetGuildNoteByName(playerName .. "-" .. playerRealm, specAndLvl)
+		end)
 	end
 
 	-- Reset the flag after a short delay (debouncing)
@@ -228,5 +231,5 @@ end
 local GuildNoteManager = CreateFrame("Frame")
 GuildNoteManager:RegisterEvent("PLAYER_LOGIN")
 GuildNoteManager:RegisterEvent("PLAYER_AVG_ITEM_LEVEL_UPDATE")
-GuildNoteManager:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED") -- Register the specialization change event
+GuildNoteManager:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 GuildNoteManager:SetScript("OnEvent", OnEvent)
