@@ -6,6 +6,6 @@
 ## Author: Josh "Kkthnx" Russell
 ## IconTexture: Interface\ICONS\INV_Misc_Note_01
 ## X-Support: DF
-## SavedVariables: GuildNoteManagerSV
+## SavedVariables: GuildNoteManagerDB
 
 GuildNoteManager.lua

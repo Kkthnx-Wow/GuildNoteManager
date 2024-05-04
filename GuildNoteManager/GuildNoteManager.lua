@@ -1,3 +1,21 @@
+-- Author: Josh 'Kkthnx' Russell 2024
+-- Addon Name: GuildNoteManager
+
+-- Cache frequently used global functions and values
+local UnitFullName = UnitFullName
+local IsInGuild = IsInGuild
+local CanEditPublicNote = CanEditPublicNote
+local GetMaxLevelForPlayerExpansion = GetMaxLevelForPlayerExpansion
+local GetMaxPlayerLevel = GetMaxPlayerLevel
+local GetProfessions = GetProfessions
+local GetSpellTabInfo = GetSpellTabInfo
+local GetSpecialization = GetSpecialization
+local GetSpecializationInfo = GetSpecializationInfo
+local GetAverageItemLevel = GetAverageItemLevel
+local GuildRosterSetPublicNote = GuildRosterSetPublicNote
+local GetGuildRosterInfo = GetGuildRosterInfo
+local GetNumGuildMembers = GetNumGuildMembers
+
 -- Constants
 local GN_UPDATE = "GN_UPDATE"
 
@@ -14,7 +32,7 @@ SLASH_GNOTEON1 = GNOTE_ON_COMMAND
 SLASH_GNOTEOFF1 = GNOTE_OFF_COMMAND
 SLASH_GNOTEHELP1 = GNOTE_HELP_COMMAND
 
-GuildNoteToggle = GuildNoteManagerDB
+local GuildNoteToggle = GuildNoteManagerDB
 
 -- Function for printing messages with color
 local function PrintMessage(message, color)
@@ -30,6 +48,29 @@ local function GetPlayerFullName()
 		return nil, nil -- Unable to get player's full name
 	end
 	return playerName, playerRealm
+end
+
+-- Function to check if the player is in a guild
+local function IsPlayerInGuild()
+	return IsInGuild()
+end
+
+-- Function to check if the player can edit their public note
+local function CanPlayerEditNote()
+	return CanEditPublicNote()
+end
+
+-- Function to check if the player is at max level
+local function IsPlayerAtMaxLevel()
+	local maxLevel = GetMaxLevelForPlayerExpansion() or GetMaxPlayerLevel()
+	local playerLevel = UnitLevel("player")
+	return playerLevel >= maxLevel
+end
+
+-- Function to check if the player has any professions
+local function DoesPlayerHaveProfessions()
+	local prof1, prof2 = GetProfessions()
+	return prof1 or prof2
 end
 
 -- Function to get player's primary professions
@@ -73,57 +114,73 @@ local function SetGuildNoteByName(sender, rmessage)
 		PrintMessage("Failed to retrieve player's full name.", "ff3333") -- Light red for failure
 		return -- Unable to get player's full name
 	end
+
 	print("Player name: " .. playerName) -- Debugging message
 	print("Player realm: " .. playerRealm) -- Debugging message
 
-	local professions = GetPrimaryProfessions()
-	local professionString = table.concat(professions, "-")
-	print("Professions: " .. professionString) -- Debugging message
+	local specAndLvl = ""
+	if IsPlayerAtMaxLevel() then
+		local currentSpec = GetSpecialization() or 0
+		local currentSpecName = select(2, GetSpecializationInfo(currentSpec)) or "None"
+		local shortSpecName = currentSpecName:gsub("(%a)%a*%s*", "%1"):upper() -- Extract first letters and convert to uppercase
+		local myitemLvl = ("%.2f"):format(GetAverageItemLevel())
+		specAndLvl = shortSpecName .. "-" .. myitemLvl
+	else
+		specAndLvl = "Leveling"
+	end
 
-	local numTotal = GetNumGuildMembers()
-	for i = 1, numTotal do
-		local fname, _, _, _, _, _, publicNote = GetGuildRosterInfo(i)
-		if fname == sender then
-			if publicNote ~= rmessage and GuildNoteManagerDB then
-				PrintMessage("-------------------------------------------------", "666666") -- Gray for separator
-				PrintMessage("PLAYER: " .. playerName .. "-" .. playerRealm .. " Note was updated to " .. rmessage .. " / " .. professionString, "ff9933") -- Orange for player update message with professions
-				PrintMessage("-------------------------------------------------", "666666") -- Gray for separator
+	if IsPlayerInGuild() then
+		if CanPlayerEditNote() then
+			local professions = GetPrimaryProfessions()
+			local professionString = ""
+			if DoesPlayerHaveProfessions() and IsPlayerAtMaxLevel() then
+				professionString = " / " .. table.concat(professions, "-")
 			end
-			GuildRosterSetPublicNote(i, rmessage .. " / " .. professionString)
-			PrintMessage("Guild note updated for player: " .. fname, "339933") -- Dark green for success
-			return
+
+			local numTotal = GetNumGuildMembers()
+			for i = 1, numTotal do
+				local fname, _, _, _, _, _, publicNote = GetGuildRosterInfo(i)
+				if fname == sender then
+					if publicNote ~= rmessage and GuildNoteManagerDB then
+						PrintMessage("-------------------------------------------------", "666666") -- Gray for separator
+						PrintMessage("PLAYER: " .. playerName .. "-" .. playerRealm .. " Note was updated to " .. rmessage .. professionString, "ff9933") -- Orange for player update message with professions
+						PrintMessage("-------------------------------------------------", "666666") -- Gray for separator
+					end
+					GuildRosterSetPublicNote(i, rmessage .. professionString)
+					PrintMessage("Guild note updated for player: " .. fname, "339933") -- Dark green for success
+					return
+				end
+			end
+			PrintMessage("Failed to update guild note for player: " .. sender, "cc3333") -- Dark red for failure
+		else
+			PrintMessage("Insufficient permission to edit public note.", "cc3333") -- Dark red for failure
 		end
+	else
+		PrintMessage("Not in a guild. Cannot update guild note.", "cc3333") -- Dark red for failure
 	end
-	PrintMessage("Failed to update guild note for player: " .. sender, "cc3333") -- Dark red for failure
 end
 
--- Function to check if the player is at max level and has professions
-local function IsMaxLevelWithProfessions()
-	local maxLevel = GetMaxLevelForPlayerExpansion() or GetMaxPlayerLevel()
-	print("maxLevel:", maxLevel)
-	local playerLevel = UnitLevel("player")
-	print("playerLevel:", playerLevel)
-	if playerLevel < maxLevel then
-		return false
-	end
-
-	local prof1, prof2 = GetProfessions()
-	if not prof1 and not prof2 then
-		return false
-	end
-
-	return true
-end
+-- Add a flag to track whether the function is currently executing
+local isUpdatingGuildNote = false
 
 -- Event handling function
 local function OnEvent(self, event, ...)
-	if event == "PLAYER_LOGIN" or event == "PLAYER_EQUIPMENT_CHANGED" then
-		C_GuildInfo.GuildRoster() -- Refresh guild info
+	if event == "PLAYER_LOGIN" or event == "PLAYER_AVG_ITEM_LEVEL_UPDATE" then
+		-- Check if the function is already executing, if so, return early
+		if isUpdatingGuildNote then
+			return
+		end
+
+		-- Set the flag to true to indicate that the function is executing
+		isUpdatingGuildNote = true
+
 		local playerName, playerRealm = GetPlayerFullName()
 		if not playerName or not playerRealm then
 			PrintMessage("Failed to get player's full name.", "ff3333") -- Light red for failure
+			isUpdatingGuildNote = false -- Reset the flag
 			return -- Unable to get player's full name
 		end
+
 		print("Player name: " .. playerName) -- Debugging message
 		print("Player realm: " .. playerRealm) -- Debugging message
 
@@ -150,14 +207,19 @@ local function OnEvent(self, event, ...)
 			print(" ")
 		end
 
-		if event == "PLAYER_EQUIPMENT_CHANGED" and IsMaxLevelWithProfessions() then
+		if event == "PLAYER_AVG_ITEM_LEVEL_UPDATE" and IsPlayerAtMaxLevel() then
 			SetGuildNoteByName(playerName .. "-" .. playerRealm, specAndLvl)
 		end
+
+		-- Reset the flag after a short delay (debouncing)
+		C_Timer.After(1, function()
+			isUpdatingGuildNote = false
+		end)
 	end
 end
 
 -- Event registration
 local GuildNoteManager = CreateFrame("Frame")
 GuildNoteManager:RegisterEvent("PLAYER_LOGIN")
-GuildNoteManager:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+GuildNoteManager:RegisterEvent("PLAYER_AVG_ITEM_LEVEL_UPDATE")
 GuildNoteManager:SetScript("OnEvent", OnEvent)
