@@ -1,12 +1,9 @@
 -- Cache frequently used global functions and values
 local table_insert = table.insert
-
 local C_ChatInfo_RegisterAddonMessagePrefix = C_ChatInfo.RegisterAddonMessagePrefix
 local CanEditPublicNote = CanEditPublicNote
 local GetAverageItemLevel = GetAverageItemLevel
 local GetGuildRosterInfo = GetGuildRosterInfo
-local GetMaxLevelForPlayerExpansion = GetMaxLevelForPlayerExpansion
-local GetMaxPlayerLevel = GetMaxPlayerLevel
 local GetNumGuildMembers = GetNumGuildMembers
 local GetProfessions = GetProfessions
 local GetSpecialization = GetSpecialization
@@ -15,7 +12,7 @@ local GetSpellTabInfo = GetSpellTabInfo
 local GuildRosterSetPublicNote = GuildRosterSetPublicNote
 local IsInGuild = IsInGuild
 local UnitFullName = UnitFullName
-local print = print
+local UnitLevel = UnitLevel
 
 -- Constants
 local GNM_UPDATE = "GNM_UPDATE"
@@ -23,17 +20,56 @@ local GNM_UPDATE = "GNM_UPDATE"
 -- Addon message prefix registration
 C_ChatInfo_RegisterAddonMessagePrefix(GNM_UPDATE)
 
--- Slash commands
-local GNOTE_ON_COMMAND = "/gnmon"
-local GNOTE_OFF_COMMAND = "/gnmoff"
-local GNOTE_HELP_COMMAND = "/gnmhelp" -- Define GNOTE_HELP_COMMAND here
+-- Initialize the localization table
+local gnmLocale = {}
 
--- Slash command functions
-SLASH_GNOTEON1 = GNOTE_ON_COMMAND
-SLASH_GNOTEOFF1 = GNOTE_OFF_COMMAND
-SLASH_GNOTEHELP1 = GNOTE_HELP_COMMAND
-
-GuildNoteToggle = GuildNoteManagerDB
+-- Set localized strings based on the client's locale
+if GetLocale() == "deDE" then
+	-- German (deDE) localization
+	gnmLocale["Leveling"] = "Leveling" -- German translation needed
+	gnmLocale["GNM: "] = "GNM: " -- German translation needed
+	gnmLocale["Note was updated to "] = " Notiz wurde aktualisiert zu " -- Example German translation
+elseif GetLocale() == "esES" then
+	-- Spanish (esES) localization
+	gnmLocale["Leveling"] = "Nivelación" -- Spanish translation needed
+	gnmLocale["GNM: "] = "GNM: " -- Spanish translation needed
+	gnmLocale["Note was updated to "] = " La nota se actualizó a " -- Example Spanish translation
+elseif GetLocale() == "frFR" then
+	-- French (frFR) localization
+	gnmLocale["Leveling"] = "Nivelación" -- French translation needed
+	gnmLocale["GNM: "] = "GNM: " -- French translation needed
+	gnmLocale["Note was updated to "] = " La note a été mise à jour à " -- Example French translation
+elseif GetLocale() == "itIT" then
+	-- Italian (itIT) localization
+	gnmLocale["Leveling"] = "Livellamento" -- Italian translation needed
+	gnmLocale["GNM: "] = "GNM: " -- Italian translation needed
+	gnmLocale["Note was updated to "] = " Nota aggiornata a " -- Example Italian translation
+elseif GetLocale() == "ruRU" then
+	-- Russian (ruRU) localization
+	gnmLocale["Leveling"] = "прокачка" -- Russian translation needed
+	gnmLocale["GNM: "] = "ГНМ: " -- Russian translation needed
+	gnmLocale["Note was updated to "] = " Примечание обновлено до " -- Example Russian translation
+elseif GetLocale() == "koKR" then
+	-- Korean (koKR) localization
+	gnmLocale["Leveling"] = "레벨링" -- Korean translation needed
+	gnmLocale["GNM: "] = "GNM: " -- Korean translation needed
+	gnmLocale["Note was updated to "] = " 노트가 업데이트되었습니다 " -- Example Korean translation
+elseif GetLocale() == "zhCN" then
+	-- Simplified Chinese (zhCN) localization
+	gnmLocale["Leveling"] = "等级提升" -- Simplified Chinese translation needed
+	gnmLocale["GNM: "] = "GNM: " -- Simplified Chinese translation needed
+	gnmLocale["Note was updated to "] = " 注释已更新为 " -- Example Simplified Chinese translation
+elseif GetLocale() == "zhTW" then
+	-- Traditional Chinese (zhTW) localization
+	gnmLocale["Leveling"] = "等級提升" -- Traditional Chinese translation needed
+	gnmLocale["GNM: "] = "GNM: " -- Traditional Chinese translation needed
+	gnmLocale["Note was updated to "] = " 註釋已更新為 " -- Example Traditional Chinese translation
+else
+	-- Default to English localization
+	gnmLocale["Leveling"] = "Leveling"
+	gnmLocale["GNM: "] = "GNM: "
+	gnmLocale["Note was updated to "] = " Note was updated to "
+end
 
 -- Function to print messages with color
 local function PrintMessage(message, color)
@@ -44,28 +80,20 @@ end
 -- Function to get player's full name and realm
 local function GetPlayerFullName()
 	local playerName, playerRealm = UnitFullName("player")
-	if not playerName or not playerRealm then
-		-- PrintMessage("Failed to retrieve player's full name.", "ff3333") -- Light red for failure
-		return nil, nil -- Unable to get player's full name
-	end
 	return playerName, playerRealm
 end
 
--- Function to check if the player is in a guild
-local function IsPlayerInGuild()
-	return IsInGuild()
+-- Functions to check if the player is at max level or trial account
+local function XPIsUserDisabled()
+	return IsXPUserDisabled()
 end
 
--- Function to check if the player can edit their public note
-local function CanPlayerEditNote()
-	return CanEditPublicNote()
+local function XPIsTrialMax()
+	return (IsRestrictedAccount() or IsTrialAccount() or IsVeteranTrialAccount()) and (UnitLevel("player") == 20)
 end
 
--- Function to check if the player is at max level
 local function IsPlayerAtMaxLevel()
-	local maxLevel = GetMaxLevelForPlayerExpansion() or GetMaxPlayerLevel()
-	local playerLevel = UnitLevel("player")
-	return playerLevel >= maxLevel
+	return IsLevelAtEffectiveMaxLevel(UnitLevel("player")) or XPIsUserDisabled() or XPIsTrialMax()
 end
 
 -- Function to check if the player has any professions
@@ -74,88 +102,62 @@ local function DoesPlayerHaveProfessions()
 	return prof1 or prof2
 end
 
--- Function to get player's primary professions
 local function GetPrimaryProfessions()
 	local professions = {}
 	local prof1, prof2 = GetProfessions()
 	if prof1 then
 		local profName1 = GetSpellTabInfo(prof1)
-		table_insert(professions, profName1:sub(1, 3):upper()) -- Extract first two letters and convert to uppercase
+		table_insert(professions, profName1:sub(1, 3):upper()) -- Extract first three letters and convert to uppercase
 	end
 	if prof2 then
 		local profName2 = GetSpellTabInfo(prof2)
-		table_insert(professions, profName2:sub(1, 3):upper()) -- Extract first two letters and convert to uppercase
+		table_insert(professions, profName2:sub(1, 3):upper()) -- Extract first three letters and convert to uppercase
 	end
 	return professions
 end
 
--- Slash command handlers
-function SlashCmdList.GNOTEON()
-	GuildNoteManagerDB = true
-	GuildNoteToggle = true
-	-- PrintMessage("Auto Guild Note login message on", "00cc00") -- Green for positive action
-end
-
-function SlashCmdList.GNOTEOFF()
-	GuildNoteManagerDB = false
-	GuildNoteToggle = false
-	-- PrintMessage("Auto Guild Note login message off", "cc0000") -- Red for negative action
-end
-
-function SlashCmdList.GNOTEHELP()
-	-- PrintMessage("Type /gnmon to turn login messages on.", "00a3cc") -- Default color
-	-- PrintMessage("Type /gnmoff to turn login messages off.", "00a3cc") -- Default color
-	-- PrintMessage("Type " .. GNOTE_UPDATE_COMMAND .. " to update your guild note manually.", "00a3cc")  -- Default color
-end
-
 -- Function to set guild note by name
-local function SetGuildNoteByName(sender, rmessage, specAndLvl)
+local function SetGuildNoteByName(sender, rmessage)
 	local playerName, playerRealm = GetPlayerFullName()
 	if not playerName or not playerRealm then
-		-- PrintMessage("Failed to retrieve player's full name.", "ff3333") -- Light red for failure
 		return -- Unable to get player's full name
 	end
 
-	-- PrintMessage("Player name: " .. playerName) -- Debugging message
-	-- PrintMessage("Player realm: " .. playerRealm) -- Debugging message
-
-	if IsPlayerInGuild() then
-		if CanPlayerEditNote() then
-			local professions = GetPrimaryProfessions()
-			local professionString = ""
-			if DoesPlayerHaveProfessions() and IsPlayerAtMaxLevel() then
-				professionString = " / " .. table.concat(professions, "-")
-			end
-
-			local numTotal = GetNumGuildMembers()
-			for i = 1, numTotal do
-				local fname, _, _, _, _, _, publicNote = GetGuildRosterInfo(i)
-				if fname == sender then
-					-- if publicNote ~= rmessage and GuildNoteManagerDB then -- Idk if I want to even keep this DB or not. We will see.
-					if publicNote ~= rmessage then
-						-- PrintMessage("-------------------------------------------------", "666666") -- Gray for separator
-						PrintMessage("GNM: " .. playerName .. "-" .. playerRealm .. " Note was updated to " .. rmessage .. professionString, "ff9933") -- Orange for player update message with professions
-						-- PrintMessage("-------------------------------------------------", "666666") -- Gray for separator
-					end
-					GuildRosterSetPublicNote(i, rmessage .. professionString)
-					-- PrintMessage("Guild note updated for player: " .. fname, "339933") -- Dark green for success
-					return
-				end
-			end
-			-- PrintMessage("Failed to update guild note for player: " .. sender, "cc3333") -- Dark red for failure
-		else
-			-- PrintMessage("Insufficient permission to edit public note.", "cc3333") -- Dark red for failure
+	if IsInGuild() and CanEditPublicNote() then
+		local professions = GetPrimaryProfessions()
+		local professionString = ""
+		if DoesPlayerHaveProfessions() and IsPlayerAtMaxLevel() then
+			professionString = " / " .. table.concat(professions, "-")
 		end
-	else
-		-- PrintMessage("Not in a guild. Cannot update guild note.", "cc3333") -- Dark red for failure
+
+		local numTotal = GetNumGuildMembers()
+		for i = 1, numTotal do
+			local fname, _, _, _, _, _, publicNote = GetGuildRosterInfo(i)
+			if fname == sender then
+				if publicNote ~= rmessage then
+					PrintMessage(gnmLocale["GNM: "] .. playerName .. "-" .. playerRealm .. gnmLocale["Note was updated to "] .. rmessage .. professionString, "ff9933") -- Orange for player update message with professions
+				end
+				GuildRosterSetPublicNote(i, rmessage .. professionString)
+				return
+			end
+		end
 	end
+end
+
+-- Function to handle debouncing of guild note updates
+local debouncingTimer
+local function HandleDebouncing()
+	if debouncingTimer then
+		debouncingTimer:Cancel() -- Cancel previous debouncing timer if it exists
+	end
+	debouncingTimer = C_Timer.NewTimer(0.5, SetGuildNoteByName) -- Schedule a new debouncing timer
 end
 
 -- Add a flag to track whether the function is currently executing
 local isUpdatingGuildNote = false
 
 -- Event handling function
-local function OnEvent(self, event, unit)
+local function OnEvent(self, event, ...)
 	-- Check if the function is already executing, if so, return early
 	if isUpdatingGuildNote then
 		return
@@ -164,15 +166,19 @@ local function OnEvent(self, event, unit)
 	-- Set the flag to true to indicate that the function is executing
 	isUpdatingGuildNote = true
 
+	-- Capture the unit parameter
+	local unit = ... or "player" -- If ... is empty, default to "player"
+
+	-- If ... is not empty, remove unit from it
+	if select("#", ...) > 0 then
+		unit = select(1, ...) -- Extract unit from ...
+	end
+
 	local playerName, playerRealm = GetPlayerFullName()
 	if not playerName or not playerRealm then
-		-- PrintMessage("Failed to get player's full name.", "ff3333") -- Light red for failure
 		isUpdatingGuildNote = false -- Reset the flag
 		return -- Unable to get player's full name
 	end
-
-	-- PrintMessage("Player name: " .. playerName) -- Debugging message
-	-- PrintMessage("Player realm: " .. playerRealm) -- Debugging message
 
 	local specAndLvl = ""
 	local currentSpec = GetSpecialization() or 0
@@ -181,48 +187,23 @@ local function OnEvent(self, event, unit)
 	local myitemLvl = ("%.2f"):format(GetAverageItemLevel())
 
 	if IsPlayerAtMaxLevel() then
-		specAndLvl = (shortSpecName or "??") .. "-" .. myitemLvl
+		specAndLvl = shortSpecName .. "-" .. myitemLvl
 	else
-		specAndLvl = (shortSpecName or "??") .. " - " .. myitemLvl .. " - " .. REQ_LEVEL_ABBR .. ": " .. UnitLevel("player")
+		specAndLvl = shortSpecName .. " - " .. myitemLvl .. " - " .. gnmLocale["Leveling"]
 	end
 
-	if event == "PLAYER_LOGIN" then
-		-- -- Print a blank line for spacing
-		-- PrintMessage(" ", "000000")
-		-- -- Notify that auto Guild Note has loaded
-		-- PrintMessage("Auto Guild Note Loaded", "669DFF")
-		-- -- Print a blank line for spacing
-		-- PrintMessage("", "000000")
-		-- -- Provide help information
-		-- PrintMessage("Type " .. GNOTE_HELP_COMMAND .. " to see help information", "00a3cc")
-		-- -- Instruct to turn login messages on
-		-- PrintMessage("Type " .. GNOTE_ON_COMMAND .. " to turn login messages on.", "00cc00")
-		-- -- Instruct to turn login messages off
-		-- PrintMessage("Type " .. GNOTE_OFF_COMMAND .. " to turn login messages off.", "cc0000")
-		-- -- Print a blank line for spacing
-		-- PrintMessage("", "000000")
-	end
-
-	if GuildNoteManagerDB and event == "PLAYER_LOGIN" then
-		-- PrintMessage("-------------------------------------------------", "666666") -- Gray for separator
-		-- PrintMessage("GNM: " .. playerName .. "-" .. playerRealm .. " logged on as " .. specAndLvl, "0066cc") -- Blue for player login message
-		-- PrintMessage("-------------------------------------------------", "666666") -- Gray for separator
-		-- print(" ")
-	end
-
-	if event == "PLAYER_AVG_ITEM_LEVEL_UPDATE" and UnitLevel("player") >= 10 then -- Idk what level or when we get spec? 15? 10? Blah!
+	if event == "PLAYER_AVG_ITEM_LEVEL_UPDATE" and unit == "player" then
 		SetGuildNoteByName(playerName .. "-" .. playerRealm, specAndLvl)
+		HandleDebouncing()
 	end
 
-	-- Handle specialization change event
-	if event == "PLAYER_SPECIALIZATION_CHANGED" and unit == "player" then
+	if event == "PLAYER_SPECIALIZATION_CHANGED" and unit == "player" then -- Handle specialization change event
 		-- Add a short delay to ensure event stability
 		C_Timer.After(0.5, function()
 			-- Update the specialization information after the delay
 			local newSpec = GetSpecialization() or 0
 			local _, newSpecName = GetSpecializationInfo(newSpec)
 			shortSpecName = newSpecName and newSpecName:gsub("(%a)%a*%s*", "%1"):upper() or "??"
-			specAndLvl = (shortSpecName or "??") .. "-" .. myitemLvl
 
 			-- Update the guild note
 			SetGuildNoteByName(playerName .. "-" .. playerRealm, specAndLvl)
